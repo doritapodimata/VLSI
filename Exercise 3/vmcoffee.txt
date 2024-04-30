@@ -1,0 +1,49 @@
+module vmcoffee(input c5, input c10, input nfc, input [5:0] water, input beans, input rstn, input clk, output reg  coffee, output reg  error);
+
+parameter [1:0] 
+IDLE=2'b00, PAID=2'b01, PAID5=2'b10,  ERROR=2'b11;
+reg [1:0] state, next;
+wire check;
+
+always @(posedge clk or negedge rstn)
+	if(!rstn) state <= IDLE;
+	else state<=next;
+
+
+assign check=(water>1&&beans)?1:0;
+
+always @(state or c5 or c10 or nfc or water or beans)begin
+	next=2'bx;
+      //coffee=1'b0; error=1'b1;
+	
+	case(state)
+		IDLE: if((!nfc||c10)&&check) next=PAID;
+			else if(c5&&nfc&&!c10&&check) next=PAID5;
+			else if(!check) next=ERROR;
+			else next=IDLE;
+		PAID5: if(!nfc||c10||c5) next=PAID;
+			else next=PAID5;
+		PAID:  next=IDLE;
+		ERROR: if(check) next=IDLE;
+			else next=ERROR;
+	endcase	
+end
+
+
+always @(posedge clk or negedge rstn)begin
+	if(!rstn) begin
+		coffee<=1'b0;
+		error<=1'b1;
+	end
+	else begin
+		coffee<=1'b0;
+		error<=1'b1;
+		case(next)
+			IDLE,PAID5: ;
+			PAID: coffee<=1'b1;
+			ERROR: error<=1'b0;
+		endcase
+	end 
+end
+
+endmodule

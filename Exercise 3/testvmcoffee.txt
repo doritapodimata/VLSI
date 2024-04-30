@@ -1,0 +1,83 @@
+module vmcoffeetb;
+
+// Inputs
+reg c5, c10, nfc, rstn;
+reg [5:0] water;
+reg beans;
+reg clk = 0;
+
+// Outputs
+wire coffee, error;
+
+
+vmcoffee dut (
+    .c5(c5),
+    .c10(c10),
+    .nfc(nfc),
+    .water(water),
+    .beans(beans),
+    .rstn(rstn),
+    .clk(clk),
+    .coffee(coffee),
+    .error(error)
+);
+
+always #5 clk = ~clk;
+
+initial begin
+    rstn = 0;
+    c5 = 0;
+    c10 = 0;
+    nfc = 0;
+    water = 0;
+    beans = 0;
+    
+    #5;
+    //NFC payment, enough water, enough beans
+    rstn <= 1;
+    water <= 6'h10;
+    beans <= 1;
+    nfc <= 0;
+
+    #20;
+    nfc <= 1;
+    c10 <= 1;
+
+    #20;
+    c10 <= 0;
+    c5 <= 1;
+
+    //no water 750
+    #30;
+    c5 <= 0;
+    nfc <= 0;
+    water <= 6'h00;
+
+    #20;
+    water <= 6'h10;
+
+    //no beans 1250
+    #30;
+    beans <= 0;
+
+    #20;
+    beans <= 1;
+
+    //No water, no beans 1750
+    #30;
+    beans <= 0;
+    water <= 6'h00;
+
+    #20;
+    beans <= 1;
+    water <= 6'h10;
+
+    //No money inserted, no water, no beans
+    #30;
+    beans <= 0;
+    water <= 6'h00;
+    nfc <= 1;
+
+end
+
+endmodule

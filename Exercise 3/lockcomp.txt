@@ -1,0 +1,63 @@
+module lockcomp (
+    input [15:0] input_number,
+    input preset, 
+    input reset,
+    input clk,  
+    output match 
+);
+
+reg[15:0] saved;
+
+always @(posedge clk or negedge reset) begin
+    if (!reset) begin
+        saved<=16'h9999;
+    end
+	else if (preset) begin
+        saved<=input_number;
+    end
+	else
+        saved<=saved;
+    
+end
+
+assign match=(saved==input_number)?1:0;
+
+endmodule
+
+
+module lockcomp_tb;
+
+reg [15:0] input_number;
+reg preset, reset, clk;
+wire match;
+
+lockcomp dut (
+    .input_number(input_number),
+    .preset(preset),
+    .reset(reset),
+    .clk(clk),
+    .match(match)
+);
+
+always #5 clk = ~clk;
+
+initial begin
+    preset <= 0;
+    reset <= 0;
+    clk<=0;
+    input_number = 16'h1234;
+
+    #4;
+    preset <= 1;
+    reset <= 1;
+
+    #5 input_number = 16'hABCD;
+    preset = 0;
+
+    #5  input_number = 16'h9999;
+    
+#5 input_number=16'hABCD;
+#5 input_number=16'h1234;
+end
+
+endmodule
