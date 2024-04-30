@@ -1,0 +1,13 @@
+module comparator #(parameter n=4, parameter m=3)(
+	input [n+m-1:0] in1,
+	input [n+m-1:0] in2,
+	output [n+m-1:0] out
+	);
+
+wire [n-1:0] c1;
+wire [n-1:0] c2;
+assign c1=in1[n-1:0];
+assign c2=in2[n-1:0];
+assign out=(c1>c2)?in1:in2;
+
+endmodule
