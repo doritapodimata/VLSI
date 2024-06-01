@@ -1,0 +1,129 @@
+module control #(parameter n=8) (
+input rst,
+input clk,
+input [n-1:0] x_i,
+input [n-1:0] y_i,
+output [n-1:0] data_o
+);
+
+parameter [1:0]
+idle=0,subtract_x=1,subtract_y=2,finish=3;
+
+reg [1:0] state,next;
+reg x_sel,y_sel;
+
+wire x_gt_y, x_lt_y, x_eq_y, x_sub,y_sub, x_ld,y_ld,data_en;
+
+data #(.n(n)) data_path
+(.x_i(x_i),.y_i(y_i),.x_sel(x_sel),.x_ld(x_ld),.y_sel(y_sel),.y_ld(y_ld),.data_en(data_en),.x_sub(x_sub),.y_sub(y_sub),
+.rst(rst),.clk(clk),.x_gt_y(x_gt_y),.x_eq_y(x_eq_y),.x_lt_y(x_lt_y),.data_o(data_o));
+
+always @(posedge clk or posedge rst)
+	if(rst) state<=idle;
+	else state <=next;
+
+always @(state or x_gt_y or x_eq_y or x_lt_y)begin
+	case(state)
+		idle: if(x_gt_y) next=subtract_x;
+			else if(x_lt_y) next=subtract_y;
+			else next=idle;
+		subtract_x: if(x_gt_y) next=subtract_x;
+ 			else if(x_lt_y) next=subtract_y;
+ 			else next=finish;
+		subtract_y: if(x_gt_y) next=subtract_x;
+ 			else if(x_lt_y) next=subtract_y;
+ 			else next=finish;
+		finish: next=idle;
+	endcase
+end
+
+assign x_sub=(state==1)?1:0;
+assign y_sub=(state==2)?1:0;
+assign x_ld=(next==2)?0:1;
+assign y_ld=(next==1)?0:1;
+assign data_en=(next==3)?1:0;
+
+always @(posedge clk or posedge rst)begin
+	if(rst==1)begin
+		x_sel=1; y_sel=1;
+	end
+	else begin
+		x_sel=1; y_sel=1;
+		case(next)
+			idle:begin
+				x_sel<=0;
+				y_sel<=0;
+			end
+			subtract_x:;
+			subtract_y:;
+			finish:;
+		endcase
+	end
+end
+
+endmodule
+
+DATA FLOW
+
+module data #(parameter n=8)
+(input [n-1:0] x_i,
+input [n-1:0] y_i,
+input x_sel,
+input x_ld,
+input y_sel,
+input y_ld,
+input data_en,
+input x_sub,
+input y_sub,
+input rst,
+input clk,
+output x_gt_y,
+output x_eq_y,
+output x_lt_y,
+output [n-1:0] data_o
+);
+
+reg [n-1:0] x_reg;
+reg [n-1:0] y_reg;
+reg [n-1:0] result;
+wire [n-1:0] x_sub_result;
+wire [n-1:0] y_sub_result;
+wire [n-1:0] x_mux;
+wire [n-1:0] y_mux;
+
+assign x_mux=(x_sel)?x_sub_result:x_i;
+assign y_mux=(y_sel)?y_sub_result:y_i;
+
+always @(posedge clk or posedge rst)begin
+	if(rst==1)
+		x_reg<=0;
+	else
+		if(x_ld==1) x_reg<=x_mux;
+			else x_reg<=x_reg;
+end
+
+always @(posedge clk or posedge rst)begin
+ if(rst==1)
+ 	y_reg<=0;
+ else
+ 	if(y_ld==1) y_reg<=y_mux;
+ 		else y_reg<=y_reg;
+end
+
+assign x_gt_y=(x_reg>y_reg)?1:0;
+assign x_lt_y=(x_reg<y_reg)?1:0;
+assign x_eq_y=(x_reg==y_reg)?1:0;
+assign x_sub_result=(x_sub)?(x_reg-y_reg):x_reg;
+assign y_sub_result=(y_sub)?(y_reg-x_reg):y_reg;
+
+always @(posedge clk or posedge rst)begin
+	if(rst==1)
+		result<=0;
+	else
+	if(data_en==1) result<=x_reg;
+		else result<=result;
+end
+
+assign data_o=result;
+
+endmodule
