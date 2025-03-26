@@ -1,0 +1,295 @@
+module dlock(
+    input rst_n, 
+    input clk, 
+    input rstn, 
+    input SW3, 
+    input [3:0] SW16, 
+    output reg lock, 
+    output reg error, 
+    output [1:0] counter
+);
+
+wire [3:0] inputdata;
+assign inputdata=SW16;
+assign open=SW3;
+
+reg [15:0] pass;
+
+parameter [5:0] locked=6'd0, in=6'd1, in_s=6'd2, in_t=6'd3, in_f=4, errorstate=5,
+				unlock=6, openstate=7, lockit=8, change=9,
+				new=10, new_s=11, new_t=12, new_f=13;
+parameter [1:0] idle=0, numin=1, waitz=2;
+wire match;
+reg preset;
+reg pulse;
+wire [3:0] inputt;
+reg[4:0] kstate, knext;
+reg[5:0] state, next;
+reg [1:0] counter_internal;
+
+assign counter = counter_internal;
+
+lockcomp DUT (.input_number(pass),.preset(preset),.rst_n(rstn),.clk(clk),.match(match));
+
+always @(posedge clk or negedge rstn)begin
+	if(!rstn)begin
+		kstate<=0;
+		state<=0;
+		counter_internal<=0;
+		pass<=0;
+	end
+	else begin
+	kstate<=knext;
+	state <= next;
+end
+end
+
+always @(kstate or inputdata)begin
+	knext=2'bx;
+	case(kstate)
+		idle: if(inputdata) knext=numin;
+			else knext=idle;
+		numin: knext=waitz;
+		waitz: if(!inputdata) knext=idle;
+			else knext=waitz;
+	endcase
+end
+
+assign inputt= (pulse)?inputdata:0;
+
+always @(posedge clk)begin
+	pulse<=0;
+	if(knext==numin) pulse<=1;
+end
+
+always @(posedge clk)begin
+	if(pulse) begin 
+	pass<={pass[11:0],inputdata};
+	counter_internal=counter_internal+1;
+	end
+	else pass<=pass;
+end
+
+always @(state or rst_n or inputt or preset or open)begin
+	next=6'bx;
+	case(state)
+		locked:if(inputt) next=in;
+				else next=locked;
+		in:if(inputt) next=in_s;
+                else next=in;
+		in_s:if(inputt) next=in_t;
+                else next=in_s;
+		in_t:if(inputt) next=in_f;
+                else next=in_t;
+		in_f:if(match) next=unlock;
+                else if(!match) next=errorstate;
+				else next=in_f;
+		errorstate: if(pass==16'h2665&&!open) next=locked;
+				else if(pass==16'h2665&&open) next=openstate;
+				else next=errorstate;
+		unlock: next=openstate;
+		openstate: if(!open&&rst_n) next=lockit;
+				else if(open&&rst_n) next=errorstate;
+				else if(pass[11:0]==12'h1f1) next=change;
+				else next=openstate;
+		lockit: next=locked;
+		change: if(inputt==1||inputt==2||inputt==5||inputt==6||inputt==15) next=errorstate;
+			else if(!inputt) next=change;
+			else next=new;
+		new:if(inputt==1||inputt==2||inputt==5||inputt==6||inputt==15) next=errorstate;
+                        else if(!inputt) next=new;
+                        else next=new_s;
+		new_s:if(inputt==1||inputt==2||inputt==5||inputt==6||inputt==15) next=errorstate;
+                        else if(!inputt) next=new_s;
+                        else next=new_t;
+		new_t:if(inputt==1||inputt==2||inputt==5||inputt==6||inputt==15) next=errorstate;
+                        else if(!inputt) next=new_t;
+                        else next=new_f;
+		new_f:next=openstate;
+	endcase
+end
+
+
+always @(*)begin
+		error=1;
+		lock=0;
+		preset=0;
+		case(state)
+			errorstate:begin
+			 error=0;
+			end
+			lockit,unlock: begin
+				lock=1;
+			end
+			new_f:begin
+				preset=1; //save new code
+			end
+		endcase
+end
+
+endmodule
+
+`timescale 1ns/1ps
+module testdlock();
+
+reg clk, rstn,rst_n,open;
+reg [3:0] key;
+wire [1:0] counter;
+wire lock,error;
+
+
+dlock DUT (.rst_n(rst_n),.clk(clk),.rstn(rstn),.SW3(open),.SW16(key),.lock(lock),.error(error),.counter(counter));
+
+always #5 clk=~clk;
+
+initial begin
+clk=0;
+rstn=0;
+open=0;
+rst_n=0;
+
+
+#5 rstn=1;
+
+repeat(4)begin
+	#20 key=$random;
+	#20 key=0; 
+end
+
+@(negedge error);
+
+$display("pressing wrong password");
+
+#20 key=2;
+#20 key=0;
+#20 key=6;
+#20 key=0;
+#20 key=6;
+#20 key=0;
+#20 key=5;
+#20 key=0;
+
+
+
+@(posedge error);
+
+$display("try again");
+repeat(4)begin
+	#20 key=4'h9;
+	#20 key=4'h0;
+end
+
+@(posedge lock);
+
+$display("unlocked");
+
+#20 rst_n=1;
+@(posedge lock);
+
+$display("locked again");
+
+rst_n=0;
+
+
+repeat(4)begin
+        #20 key=4'h9;
+        #20 key=4'h0;
+end
+
+@(posedge lock);
+
+$display("unlocked again");
+
+#20 open=1;
+rst_n=1;
+
+@(negedge error);
+$display("tried to lock with door open");
+
+#5 rst_n=0;
+#20 key=2;
+#20 key=0;
+#20 key=6;
+#20 key=0;
+#20 key=6;
+#20 key=0;
+#20 key=5;
+#20 key=0;
+
+@(posedge error);
+
+$display("error resolved");
+
+#20 key=1;
+#20 key=0;
+#20 key=4'hf;
+#20 key=0;
+#20 key=1;
+#20 key=0;
+
+$display(" new  password");
+
+#20 key=14;
+#20 key=0;
+#20 key=6;
+#20 key=0;
+#20 key=7;
+#20 key=0;
+#20 key=11;
+#20 key=0;
+
+if(error==0)
+$display("bad new password");
+
+#20 key=2;
+#20 key=0;
+#20 key=6;
+#20 key=0;
+#20 key=6;
+#20 key=0;
+#20 key=5;
+#20 key=0;
+@(posedge error);
+$display("error resolved");
+
+#20 key=1;
+#20 key=0;
+#20 key=4'hf;
+#20 key=0;
+#20 key=1;
+#20 key=0;
+
+$display("new attempt of new password");
+
+#20 key=14;
+#20 key=0;
+#20 key=8;
+#20 key=0;
+#20 key=7;
+#20 key=0;
+#20 key=11;
+#20 key=0;
+
+open=0;
+rst_n=1;
+@(posedge lock);
+#20 rst_n=0;
+
+#20 key=14;
+#20 key=0;
+#20 key=8;
+#20 key=0;
+#20 key=7;
+#20 key=0;
+#20 key=11;
+#20 key=0;
+
+
+@(posedge lock);
+$finish;
+
+$display("Testbench complete.");
+$finish();
+
+end
+endmodule
