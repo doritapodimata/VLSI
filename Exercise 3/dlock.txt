@@ -76,16 +76,6 @@ always @(state or reset or inputt or preset or open)begin
 		errorstate: if(pass==16'h2665&&!open) next=locked;
 				else if(pass==16'h2665&&open) next=openstate;
 				else next=errorstate;
-/*		a: if(inputt==6) next=ab;
-			else if(inputt) next=errorstate;
-			else next=a;
-		ab: if(inputt==6) next=abb;
-                        else if(inputt)	next=errorstate;
-                        else next=ab;
-		abb: if(inputt==5&&open) next=openstate;
-                        else if(inputt==5&&!open)next=locked;
-                        else if(inputt) next=errorstate;
-			else next=abb; */
 		unlock: next=openstate;
 		openstate: if(!open&&reset) next=lockit;
 				else if(open&&reset) next=errorstate;
@@ -118,7 +108,6 @@ always @(posedge clk or negedge rstn)begin
 	else begin
 		error<=1;
 		lock<=0;
-	//	counter_internal<=counter_internal+1;
 		preset<=0;
 		case(next)
 			errorstate:begin
@@ -126,11 +115,6 @@ always @(posedge clk or negedge rstn)begin
 			//counter_internal=0;
 			end
 			lockit,unlock: lock<=1;
-			//locked: counter_internal<=0;
-			/*in: counter<=1;
-			inn:counter<=2;
-			innn:counter<=3;
-			innnn:counter<=4;*/
 			newwww:preset<=1;
 		endcase
 
