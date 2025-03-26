@@ -1,0 +1,73 @@
+module parallelargmax #(parameter k=10, parameter n=4, parameter m=$clog2(k))(	
+	input [k*n-1:0] data,
+	output [m-1:0] result);
+
+wire [n+m-1:0] data2 [k-1:0];
+wire [n+m-1:0] tree [k-1:1];
+wire [n+m-1:0] last;
+genvar gi;
+		
+generate 
+for(gi=0;gi<k;gi=gi+1)begin:gen
+	wire [m-1:0] num= k-1-gi;
+	wire [n-1:0] value = data[gi*n+n-1:gi*n];
+	assign data2[gi]={num,value};
+end
+
+for(gi=k/2;gi<=k-1;gi=gi+1)begin:gen2
+	if(gi!=k-1||k%2==0)
+	comparator #(.n(n),.m(m)) compare(.in1(data2[(gi-k/2)*2]),.in2(data2[(gi-k/2)*2+1]),.out(tree[gi]));
+	if(gi==k-1&&k%2==1)
+	assign tree[gi]=data2[k-1];	
+end
+
+for(gi=k/2-1;gi>0;gi=gi-1)begin:gen3
+	comparator #(.n(n),.m(m)) compare(.in1(tree[2*gi]),.in2(tree[2*gi+1]),.out(tree[gi]));
+end
+
+
+if(k%2==1)
+	begin
+		comparator #(.n(n),.m(m)) compare(.in1(tree[1]),.in2(tree[k-1]),.out(last));
+		assign result=last[n+m-1:n];
+	end
+else
+	begin
+		assign last=tree[1];
+		assign result=last[n+m-1:n];
+	end
+endgenerate
+
+
+endmodule
+
+module argptb;
+
+reg check;
+reg signed [4:0] data [3:0];
+reg test [3:0];
+wire [19:0] in;
+wire [1:0] out;
+
+assign in={data[3],data[2],data[1],data[0]};
+integer i,p=0;
+
+parallelargmax #(.k(4),.n(5)) argp(.data(in),.result(out));
+
+initial
+begin
+
+	repeat(10) begin
+		 for(i=0;i<4;i=i+1)begin
+			data[i]=$random;
+			end
+		
+		check=1'b1;
+	#1	for(i=1;i<4;i=i+1)begin
+			if(data[i]>data[out])
+			check=1'bx;
+			end
+	end
+end
+
+endmodule

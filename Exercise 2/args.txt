@@ -1,0 +1,123 @@
+module argmax_serial #(parameter k=6, parameter n=4, parameter m=$clog2(k))(input [k*n-1:0] data, input pl, input clk, input rstn, output ready, output [m-1:0] out);
+	genvar gi;
+	reg [k*n-1:0] register;
+	wire compare;
+	reg [n+m-1:0] result;
+	reg [m:0] counter;
+	reg r;
+	reg [m:0] pointer;
+	
+	always @(posedge clk or negedge rstn)begin
+		if(rstn==0)
+			register<=0;
+		else
+			begin
+			if(compare)
+				register<=register>>n;
+			else begin
+				if(pl)
+					register<=data;
+			end
+		end
+	end
+
+	always @(posedge clk or negedge rstn)begin
+		if(rstn==0||(pl==1&&counter==0))
+			result<=0;
+		else begin
+			if(compare)
+				if(result<register[n-1:0])begin
+					result<=register[n-1:0];
+					pointer<=counter-1;
+				end
+		end
+	end
+
+	always @(posedge clk or negedge rstn)begin
+		if(rstn==0)
+			counter<=0;
+		else begin
+		if(counter!=0&&compare==1)
+			counter<=counter-1;
+		else if(pl)
+            counter<=k;
+		end
+	end
+	
+	always @(posedge clk or negedge rstn)begin
+		if(rstn==0)
+			r<=0;
+		else begin
+			if(counter==0)
+			r<=0;
+		else
+			r<=1;
+		end
+	end
+
+assign compare=r;
+assign ready=(counter==0)?1:0;
+assign out=pointer;
+
+endmodule
+
+
+
+module argptb;
+
+reg check;
+reg [19:0] data, test;
+//reg test [3:0];
+wire [19:0] in;
+wire [1:0] out;
+reg clk,pl,rstn;
+wire ready;
+reg [4:0] data2 [3:0];
+wire [19:0] c;
+
+assign c = {data2[0],data2[1],data2[2],data2[3]};
+
+assign in = data;
+integer i,p=0;
+
+argmax_serial #(.k(4),.n(5)) args(.data(in),.pl(pl),.clk(clk),.rstn(rstn),.ready(ready),.out(out));
+
+always #5 clk=~clk;
+
+initial
+begin
+
+data<=c;
+
+rstn<=0;
+clk<=0;
+#5 rstn=1;
+pl<=1;
+#10 pl<=0;
+
+	repeat(10) begin
+			for(i=0;i<4;i=i+1)begin
+			data[i]=$random;
+			end
+			
+		
+		check=1'b1;
+	@(posedge ready) begin
+	#1
+			if(data[0]>data[out])
+			check=1'bx;
+			
+	
+/*			pl<=1;
+			#10 pl<=0;
+
+		for(i=0;i<4;i=i+1)begin
+			
+		
+			data[i+4:i]=$random;
+			end
+		in<= */
+	end
+end
+end
+endmodule
